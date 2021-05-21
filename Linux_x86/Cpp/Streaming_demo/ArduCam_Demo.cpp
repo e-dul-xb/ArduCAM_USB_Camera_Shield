@@ -610,8 +610,8 @@ int main(int argc, char **argv)
 		if (digital_gain != 0) {
 			std::cout << "*** Digital gain " << std::endl;
 			Uint32 gain_new = 0;
-			write_two_reg_high_mask(cameraHandle, 0x0158, 0x0159, digital_gain, 0x7);
-			read_two_reg_high_mask(cameraHandle, 0x0158, 0x0159, gain_new, 0x7);
+			write_two_reg_high_mask(cameraHandle, 0x0158, 0x0159, digital_gain, 0xF);
+			read_two_reg_high_mask(cameraHandle, 0x0158, 0x0159, gain_new, 0xF);
 			std::cout << "new digital gain " << gain_new << std::endl;
 		}
 		std::thread captureThread(captureImage_thread, cameraHandle);
