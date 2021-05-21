@@ -25,8 +25,12 @@
 #include <sys/stat.h> 
 #include "arducam_config_parser.h"
 
+#include <boost/program_options.hpp>
+
 using namespace std;
 using namespace cv;
+
+namespace po = boost::program_options;
 
 ArduCamCfg cameraCfg;
 volatile bool _running = true;
@@ -34,8 +38,8 @@ bool save_raw = false;
 bool save_flag = false;
 int color_mode = 0;
 void showHelp() {
-	printf(" usage: sudo ./ArduCam_Demo <path/config-file-name>	\
-			\n\n example: sudo ./ArduCam_Demo ../../../cpp_config/AR0134_960p_Color.yml	\
+	printf(" usage: ./ArduCam_Demo <path/config-file-name>	\
+			\n\n example: ./ArduCam_Demo ../../../cpp_config/AR0134_960p_Color.yml	\
 			\n\n While the program is running, you can press the following buttons in the terminal:	\
 			\n\n 's':Save the image to the images folder.	\
 			\n\n 'c':Stop saving images.	\
@@ -480,7 +484,6 @@ void readImage_thread(ArduCamHandle handle) {
 	std::cout << "Read thread stopped" << std::endl;
 }
 
-
 int main(int argc, char **argv)
 {
 #ifdef linux
@@ -492,15 +495,33 @@ int main(int argc, char **argv)
 #endif
 	ArduCamHandle cameraHandle;
 
-	const char * config_file_name;
-	if (argc > 1) {
-		config_file_name = argv[1];
-	}
-	else {
-		showHelp();
-		return 0;
-	}
 
+  int exposure = 0;
+  int analogue_gain = 0;
+  int digital_gain = 0;
+  std::string config_file_name = "";
+
+
+  po::options_description desc("Options");
+  desc.add_options()("help,h", "print help message");
+  desc.add_options()("config,c", po::value<std::string>(&config_file_name)->required(), "Camera config.");
+  desc.add_options()("exposure,e", po::value<int>(&exposure), "Exposure.");
+  desc.add_options()("digital_gain,d", po::value<int>(&exposure), "Digital gain.");
+  desc.add_options()("analogue_gain,a", po::value<int>(&exposure), "Analogue gain.");
+
+  po::variables_map variables_map;
+  po::store(po::parse_command_line(argc, argv, desc), variables_map);
+  if (variables_map.count("help")) {
+    std::cout << desc << std::endl;
+    return 0;
+  }
+
+  try {
+    po::notify(variables_map);
+  } catch (std::exception &e) {
+    std::cerr << "Error: " << e.what() << std::endl << std::endl << desc << std::endl;
+    exit(1);
+  }
 	ArduCamIndexinfo pUsbIdxArray[16];
 	int camera_num = 0;
 	camera_num = ArduCam_scan(pUsbIdxArray);
@@ -525,6 +546,15 @@ int main(int argc, char **argv)
 	//read config file and open the camera.
 	if (camera_initFromFile(config_file_name, cameraHandle, cameraCfg)) {
 		ArduCam_setMode(cameraHandle, CONTINUOUS_MODE);
+		if (exposure != 0){
+
+		}
+		if (analogue_gain != 0){
+			
+		}
+		if (digital_gain != 0){
+			
+		}
 		std::thread captureThread(captureImage_thread, cameraHandle);
 		std::thread readThread(readImage_thread, cameraHandle);
 		std::cout << "capture thread create successfully." << std::endl;
