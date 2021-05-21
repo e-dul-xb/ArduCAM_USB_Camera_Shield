@@ -248,8 +248,9 @@ void configBoard(ArduCamHandle &cameraHandle, Config config) {
 bool camera_initFromFile(std::string filename, ArduCamHandle &cameraHandle, ArduCamCfg &cameraCfg) {
 	CameraConfigs cam_cfgs;
 	memset(&cam_cfgs, 0x00, sizeof(CameraConfigs));
-	if (arducam_parse_config(filename.c_str(), &cam_cfgs)) {
-		std::cout << "Cannot find configuration file." << std::endl << std::endl;
+	int ret = arducam_parse_config(filename.c_str(), &cam_cfgs);
+	if (ret) {
+		std::cout << "Cannot find configuration file. Error " << ret << std::endl << std::endl;
 		showHelp();
 		return false;
 	}
@@ -502,6 +503,21 @@ int write_two_reg(ArduCamHandle handle, Uint32 regAddr_high, Uint32 regAddr_low,
 	return write_two_reg(handle, regAddr_high, high_bytes, regAddr_low, low_bytes);
 }
 
+int write_three_reg(ArduCamHandle handle, Uint32 regAddr_high, Uint32 val_high, Uint32 regAddr_mid, 
+                    Uint32 val_mid, Uint32 regAddr_low, Uint32 val_low) {
+	return (ArduCam_writeSensorReg(handle, regAddr_high, val_high) == 0 
+	&& ArduCam_writeSensorReg(handle, regAddr_mid, val_mid) == 0 
+	&& ArduCam_writeSensorReg(handle, regAddr_low, val_low) == 0);
+}
+
+int write_three_reg_high_mask(ArduCamHandle handle, Uint32 regAddr_high, Uint32 regAddr_mid, Uint32 regAddr_low, Uint32 val, Uint32 high_mask = 0xFF) {
+	uint8_t low_bytes = val & 0xFF;
+	uint8_t mid_bytes = val >> 8 & 0xFF;
+	uint8_t high_bytes = val >> 16 & high_mask;
+	std::cout << "split high " << static_cast<int>(high_bytes) << " mid " << static_cast<int>(mid_bytes) << " low " << static_cast<int>(low_bytes) << std::endl;
+	return write_three_reg(handle, regAddr_high, high_bytes, regAddr_mid, mid_bytes, regAddr_low, low_bytes);
+}
+
 
 int read_two_reg(ArduCamHandle handle, Uint32 regAddr_high, Uint32 regAddr_low, Uint32& val) {
 	Uint32 read_low_bytes = 0;
@@ -529,6 +545,21 @@ int read_two_reg_high_mask(ArduCamHandle handle, Uint32 regAddr_high, Uint32 reg
 	return -1;
 }
 
+int read_three_reg_high_mask(ArduCamHandle handle, Uint32 regAddr_high, Uint32 regAddr_mid, Uint32 regAddr_low, Uint32& val, Uint32 high_mask = 0xFF) {
+	Uint32 read_low_bytes = 0;
+	Uint32 read_mid_bytes = 0;
+	Uint32 read_high_bytes = 0;
+	if(ArduCam_readSensorReg(handle, regAddr_high, &read_high_bytes) == 0 && ArduCam_readSensorReg(handle, regAddr_mid, &read_mid_bytes) == 0
+	   && ArduCam_readSensorReg(handle, regAddr_low, &read_low_bytes) == 0){
+		// std::cout << "split high " << read_high_bytes << " low " << read_low_bytes << std::endl;
+		std::cout << "new  " << read_low_bytes + ((read_mid_bytes & 0xFF) << 8) + ((read_high_bytes & high_mask) << 16) << std::endl;
+		val = read_low_bytes + ((read_mid_bytes & 0xFF) << 8) + ((read_high_bytes & high_mask) << 16);
+		return 0;
+	}
+	val = 0;
+	return -1;
+}
+
 int main(int argc, char **argv)
 {
 #ifdef linux
@@ -541,7 +572,7 @@ int main(int argc, char **argv)
 	ArduCamHandle cameraHandle;
 
 
-  uint16_t exposure = 0;
+  uint32_t exposure = 0;
   uint16_t analogue_gain = 0;
   int digital_gain = 0;
   std::string config_file_name = "";
@@ -550,7 +581,7 @@ int main(int argc, char **argv)
   po::options_description desc("Options");
   desc.add_options()("help,h", "print help message");
   desc.add_options()("config,c", po::value<std::string>(&config_file_name)->required(), "Camera config.");
-  desc.add_options()("exposure,e", po::value<uint16_t>(&exposure), "Exposure.");
+  desc.add_options()("exposure,e", po::value<uint32_t>(&exposure), "Exposure.");
   desc.add_options()("digital_gain,d", po::value<int>(&digital_gain), "Digital gain.");
   desc.add_options()("analogue_gain,a", po::value<uint16_t>(&analogue_gain), "Analogue gain.");
 
@@ -591,27 +622,29 @@ int main(int argc, char **argv)
 	//read config file and open the camera.
 	if (camera_initFromFile(config_file_name, cameraHandle, cameraCfg)) {
 		ArduCam_setMode(cameraHandle, CONTINUOUS_MODE);
+		// enable manual exposure and manual gain
+		ArduCam_writeSensorReg(cameraHandle, 0x3503, 3);
 		// adjust params
 		if (exposure != 0) {
 			std::cout << "*** Exposure " << std::endl;
 			Uint32 exposure_new = 0;
-			write_two_reg(cameraHandle, 0x015A, 0x015B, exposure);
-			read_two_reg(cameraHandle, 0x015A, 0x015B, exposure_new);
+			write_three_reg_high_mask(cameraHandle, 0x3500, 0x3501, 0x3502, exposure, 0xF);
+			read_three_reg_high_mask(cameraHandle, 0x3500, 0x3501, 0x3502, exposure_new, 0xF);
 			std::cout << "new exposure " << exposure_new << std::endl;
 		}
 		if (analogue_gain != 0) {
-			std::cout << "*** Analogue gain " << std::endl;
-			std::cout << "analogue gain " << static_cast<int>(analogue_gain) << std::endl;
-			Uint32 gain_new = 0;
-			ArduCam_writeSensorReg(cameraHandle, 0x0157, analogue_gain & 0xFF);
-			ArduCam_readSensorReg(cameraHandle, 0x0157, &gain_new);
-			std::cout << "new analogue gain " << (gain_new & 0xFF) << std::endl;
+			std::cout << "*** Analogue gain NO SUPPORT" << std::endl;
+			// std::cout << "analogue gain " << static_cast<int>(analogue_gain) << std::endl;
+			// Uint32 gain_new = 0;
+			// ArduCam_writeSensorReg(cameraHandle, 0x0157, analogue_gain & 0xFF);
+			// ArduCam_readSensorReg(cameraHandle, 0x0157, &gain_new);
+			// std::cout << "new analogue gain " << (gain_new & 0xFF) << std::endl;
 		}
 		if (digital_gain != 0) {
 			std::cout << "*** Digital gain " << std::endl;
 			Uint32 gain_new = 0;
-			write_two_reg_high_mask(cameraHandle, 0x0158, 0x0159, digital_gain, 0x7);
-			read_two_reg_high_mask(cameraHandle, 0x0158, 0x0159, gain_new, 0x7);
+			write_two_reg_high_mask(cameraHandle, 0x350A, 0x350B, digital_gain, 0x3);
+			read_two_reg_high_mask(cameraHandle, 0x350A, 0x350B, gain_new, 0x3);
 			std::cout << "new digital gain " << gain_new << std::endl;
 		}
 		std::thread captureThread(captureImage_thread, cameraHandle);
