@@ -638,14 +638,14 @@ int main(int argc, char **argv)
 			Uint32 gain_new = 0;
 			ArduCam_writeSensorReg(cameraHandle, 0x3508, corse_gain & 0x1F);
 			ArduCam_readSensorReg(cameraHandle, 0x3508, &gain_new);
-			std::cout << "new Corse gain " << (gain_new & 0x1F) << std::endl;
+			std::cout << "new Corse gain " << static_cast<int>((gain_new & 0x1F)) << std::endl;
 		}
 		if (fine_gain != 0) {
 			std::cout << "*** Fine gain " << std::endl;
 			Uint32 gain_new = 0;
-			ArduCam_writeSensorReg(cameraHandle, 0x3509, fine_gain & 0xF0);
+			ArduCam_writeSensorReg(cameraHandle, 0x3509, (fine_gain << 4) & 0xF0);
 			ArduCam_readSensorReg(cameraHandle, 0x3509, &gain_new);
-			std::cout << "new Fine gain " << (gain_new & 0xF0) << std::endl;
+			std::cout << "new Fine gain " << static_cast<int>((gain_new >> 4 & 0xF)) << std::endl;
 		}
 		std::thread captureThread(captureImage_thread, cameraHandle);
 		std::thread readThread(readImage_thread, cameraHandle);
