@@ -572,18 +572,18 @@ int main(int argc, char **argv)
 	ArduCamHandle cameraHandle;
 
 
-  uint32_t exposure = 0;
-  uint16_t analogue_gain = 0;
-  int digital_gain = 0;
+  uint16_t exposure = 0;
+  uint16_t corse_gain = 0;
+  uint16_t fine_gain = 0;
   std::string config_file_name = "";
 
 
   po::options_description desc("Options");
   desc.add_options()("help,h", "print help message");
   desc.add_options()("config,c", po::value<std::string>(&config_file_name)->required(), "Camera config.");
-  desc.add_options()("exposure,e", po::value<uint32_t>(&exposure), "Exposure.");
-  desc.add_options()("digital_gain,d", po::value<int>(&digital_gain), "Digital gain.");
-  desc.add_options()("analogue_gain,a", po::value<uint16_t>(&analogue_gain), "Analogue gain.");
+  desc.add_options()("exposure,e", po::value<uint16_t>(&exposure), "Exposure.");
+  desc.add_options()("corse_gain,d", po::value<uint16_t>(&corse_gain), "Corse gain.");
+  desc.add_options()("fine_gain,a", po::value<uint16_t>(&fine_gain), "Fine gain.");
 
   po::variables_map variables_map;
   po::store(po::parse_command_line(argc, argv, desc), variables_map);
@@ -628,24 +628,24 @@ int main(int argc, char **argv)
 		if (exposure != 0) {
 			std::cout << "*** Exposure " << std::endl;
 			Uint32 exposure_new = 0;
-			write_three_reg_high_mask(cameraHandle, 0x3500, 0x3501, 0x3502, exposure, 0xF);
-			read_three_reg_high_mask(cameraHandle, 0x3500, 0x3501, 0x3502, exposure_new, 0xF);
+			write_two_reg(cameraHandle, 0x3501, 0x3502, exposure);
+			read_two_reg(cameraHandle, 0x3501, 0x3502, exposure_new);
 			std::cout << "new exposure " << exposure_new << std::endl;
 		}
-		if (analogue_gain != 0) {
-			std::cout << "*** Analogue gain NO SUPPORT" << std::endl;
-			// std::cout << "analogue gain " << static_cast<int>(analogue_gain) << std::endl;
-			// Uint32 gain_new = 0;
-			// ArduCam_writeSensorReg(cameraHandle, 0x0157, analogue_gain & 0xFF);
-			// ArduCam_readSensorReg(cameraHandle, 0x0157, &gain_new);
-			// std::cout << "new analogue gain " << (gain_new & 0xFF) << std::endl;
-		}
-		if (digital_gain != 0) {
-			std::cout << "*** Digital gain " << std::endl;
+		if (corse_gain != 0) {
+			std::cout << "*** Corse gain" << std::endl;
+			std::cout << "Corse gain " << static_cast<int>(corse_gain) << std::endl;
 			Uint32 gain_new = 0;
-			write_two_reg_high_mask(cameraHandle, 0x350A, 0x350B, digital_gain, 0x3);
-			read_two_reg_high_mask(cameraHandle, 0x350A, 0x350B, gain_new, 0x3);
-			std::cout << "new digital gain " << gain_new << std::endl;
+			ArduCam_writeSensorReg(cameraHandle, 0x3508, corse_gain & 0x1F);
+			ArduCam_readSensorReg(cameraHandle, 0x3508, &gain_new);
+			std::cout << "new Corse gain " << (gain_new & 0x1F) << std::endl;
+		}
+		if (fine_gain != 0) {
+			std::cout << "*** Fine gain " << std::endl;
+			Uint32 gain_new = 0;
+			ArduCam_writeSensorReg(cameraHandle, 0x3509, fine_gain & 0xF0);
+			ArduCam_readSensorReg(cameraHandle, 0x3509, &gain_new);
+			std::cout << "new Fine gain " << (gain_new & 0xF0) << std::endl;
 		}
 		std::thread captureThread(captureImage_thread, cameraHandle);
 		std::thread readThread(readImage_thread, cameraHandle);
