@@ -19,3 +19,4 @@ clean:
 
 install-sdk:
 	sudo cp -d $(LDIR)/lib*.so* /usr/lib
+	sudo cp $(LDIR)/ArduCamLib.h /usr/include
