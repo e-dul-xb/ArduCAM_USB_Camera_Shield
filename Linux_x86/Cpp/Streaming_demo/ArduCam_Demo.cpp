@@ -146,6 +146,7 @@ cv::Mat BytestoMat(Uint8* bytes, int width, int height)
 }
 
 cv::Mat ConvertImage(ArduCamOutData* frameData) {
+	std::cout << "time: " << frameData->u64Time << std::endl;
 	cv::Mat rawImage;
 	Uint8* data = frameData->pu8ImageData;
 	int height, width;
